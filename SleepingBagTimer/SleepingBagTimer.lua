@@ -166,11 +166,15 @@ local function CameFromAreaChange(restedAt)
     return lastAreaChangeAt and math.abs(restedAt - lastAreaChangeAt) <= AREA_CHANGE_WINDOW
 end
 
+local DebugLog -- [DEBUG-sbt]
+
 local function OnBecameRested()
     local restedAt = GetTime()
+    DebugLog("DECIDE_REST", lastBagCastAt or false, lastAreaChangeAt or false) -- [DEBUG-sbt]
     if not lastBagCastAt or restedAt - lastBagCastAt > PLACED_BAG_LIFETIME then return end
     -- Area events may arrive just after the Rested change, so decide a moment later.
     C_Timer.After(SETTLE_DELAY, function()
+        DebugLog("SETTLED", restedAt, lastAreaChangeAt or false, timer and true or false) -- [DEBUG-sbt]
         if timer or not IsResting() then return end
         if CameFromAreaChange(restedAt) then return end
         StartSleeping(restedAt)
@@ -185,12 +189,34 @@ bar:SetScript("OnUpdate", function(_, elapsed)
     Render()
 end)
 
+-- [DEBUG-sbt] event trace, saved to SleepingBagTimerDebugLog for replay in tests/replay.lua
+local debugBuffer = {}
+DebugLog = function(event, ...) -- [DEBUG-sbt]
+    local aura = C_UnitAuras and C_UnitAuras.GetPlayerAuraBySpellName and C_UnitAuras.GetPlayerAuraBySpellName(BUFF_NAME)
+    debugBuffer[#debugBuffer + 1] = {
+        t = GetTime(), e = event, a = { ... }, resting = IsResting(),
+        stacks = aura and aura.applications, exp = aura and aura.expirationTime,
+        shown = bar:IsShown(),
+    }
+end -- [DEBUG-sbt]
+
 local wasResting = false
 local events = CreateFrame("Frame")
 
-events:SetScript("OnEvent", function(_, event, ...)
+local OnEvent -- [DEBUG-sbt]
+events:SetScript("OnEvent", function(self, event, ...) -- [DEBUG-sbt]
+    if event == "ADDON_LOADED" and ... == ADDON_NAME then SleepingBagTimerDebugLog = debugBuffer end -- [DEBUG-sbt]
+    if event == "ADDON_LOADED" then return end -- [DEBUG-sbt]
+    DebugLog(event, ...) -- [DEBUG-sbt]
+    local ok, err = pcall(OnEvent, self, event, ...) -- [DEBUG-sbt]
+    if not ok then DebugLog("LUA_ERROR", tostring(err)) end -- [DEBUG-sbt]
+    DebugLog("AFTER_" .. event) -- [DEBUG-sbt]
+end) -- [DEBUG-sbt]
+
+OnEvent = function(_, event, ...) -- [DEBUG-sbt] was: events:SetScript("OnEvent", function(_, event, ...)
     if event == "UNIT_SPELLCAST_SUCCEEDED" then
         local _, _, spellID = ...
+        DebugLog("CAST_CHECK", spellID, BagSpellID()) -- [DEBUG-sbt]
         if spellID and spellID == BagSpellID() then
             lastBagCastAt = GetTime()
         end
@@ -215,8 +241,9 @@ events:SetScript("OnEvent", function(_, event, ...)
     else -- area change
         lastAreaChangeAt = GetTime()
     end
-end)
+end -- [DEBUG-sbt] was: end)
 
+events:RegisterEvent("ADDON_LOADED") -- [DEBUG-sbt]
 events:RegisterUnitEvent("UNIT_SPELLCAST_SUCCEEDED", "player")
 events:RegisterUnitEvent("UNIT_AURA", "player")
 events:RegisterEvent("PLAYER_UPDATE_RESTING")
