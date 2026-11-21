@@ -2,6 +2,5 @@
 ## Title: Sleeping Bag Timer
 ## Notes: Shows a Sleep Timer while Sleeping on your own Cozy Sleeping Bag.
 ## Version: 0.1.0
-## SavedVariables: SleepingBagTimerDebugLog
 
 SleepingBagTimer.lua

@@ -9,4 +9,5 @@ Copy or symlink the `SleepingBagTimer/` folder into `World of Warcraft/<flavor>/
 
 ## Tests
 
-The timer logic runs outside the game: `luajit tests/logic_spec.lua`
+- Timer logic: `luajit tests/logic_spec.lua`
+- Replay a recorded session against a mocked WoW Forever API: `luajit tests/replay.lua tests/traces/<trace>.lua`

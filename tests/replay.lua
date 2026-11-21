@@ -1,5 +1,7 @@
 -- Replays a SleepingBagTimerDebugLog trace through the real addon with a mocked WoW API.
 -- Usage: luajit tests/replay.lua <trace.lua>
+-- Traces in tests/traces/captured-*.lua were recorded in game by temporary instrumentation
+-- (commit 7894e8f); the synthetic entries it wrote (CAST_CHECK, AFTER_*, ...) are skipped.
 -- Exits 1 (red) if the Sleep Timer bar never appears while the trace has the character Sleeping.
 
 local tracePath = assert(arg[1], "usage: luajit tests/replay.lua <trace.lua>")
@@ -64,7 +66,6 @@ local bar = _G.SleepingBagTimerBar
 local eventFrame
 for _, f in ipairs(frames) do if f.scripts.OnEvent then eventFrame = f end end
 assert(bar and eventFrame, "addon did not create its frames")
-eventFrame.scripts.OnEvent(eventFrame, "ADDON_LOADED", "SleepingBagTimer")
 
 -- Load and replay the trace -----------------------------------------------------
 local env = {}
