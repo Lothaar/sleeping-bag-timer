@@ -48,15 +48,20 @@ GetTime = function() return now end
 IsResting = function() return resting end
 C_Timer = { After = function(delay, fn) pending[#pending + 1] = { at = now + delay, fn = fn } end }
 C_Item = { GetItemSpell = function(id) if id == 211527 then return "Unroll Bag", 429961 end end }
--- WoW Forever (16001) has no C_UnitAuras.GetPlayerAuraBySpellName (captured trace, Lua error at
--- line 91), so only the classic index-based aura API is mocked.
-local function unitAura(unit, index, filter)
-    if unit == "player" and index == 1 and aura and (filter == nil or filter == "HELPFUL") then
-        return "Well-Rested", 136090, aura.applications, nil, 3600, aura.expirationTime
-    end
-end
-UnitAura, UnitBuff = unitAura, unitAura
-C_UnitAuras = {} -- exists on 16001, but without GetPlayerAuraBySpellName
+-- WoW Forever (16001): C_UnitAuras exists, but without GetPlayerAuraBySpellName (captured trace,
+-- Lua error at line 91). GetAuraDataByIndex exists, but auras are secret in combat: calling it
+-- then raises "Auras cannot be accessed when secret while tainted" (in-game error report).
+local inCombat = false
+C_UnitAuras = {
+    GetAuraDataByIndex = function(unit, index, filter)
+        if inCombat then error("GetAuraDataByIndex(): Auras cannot be accessed when secret while tainted by 'SleepingBagTimer'") end
+        if unit == "player" and index == 1 and aura and (filter == nil or filter == "HELPFUL") then
+            return { name = "Well-Rested", applications = aura.applications, expirationTime = aura.expirationTime }
+        end
+    end,
+}
+InCombatLockdown = function() return inCombat end
+UnitAffectingCombat = function(unit) return unit == "player" and inCombat end
 
 -- Load the addon ---------------------------------------------------------------
 local chunk = assert(loadfile("SleepingBagTimer/SleepingBagTimer.lua"))
@@ -78,7 +83,7 @@ for _, entry in ipairs(trace) do
     local e = entry.e
     if not SYNTHETIC[e] and not e:match("^AFTER_") and not e:match("^ADDON_LOADED") then
         runTimersUntil(entry.t)
-        now, resting = entry.t, entry.resting
+        now, resting, inCombat = entry.t, entry.resting, entry.combat or false
         aura = entry.stacks and { applications = entry.stacks, expirationTime = entry.exp } or nil
         if e == "PLAYER_UPDATE_RESTING" and resting then sleptAt = sleptAt or entry.t end
         local ok, err = pcall(eventFrame.scripts.OnEvent, eventFrame, e, unpack(entry.a or {}))

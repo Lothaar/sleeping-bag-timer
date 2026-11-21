@@ -100,7 +100,10 @@ local function PlayerBuff(index)
     return name, count, expirationTime
 end
 
+-- Returns the Well-Rested Stack count and expiration, or nil in combat:
+-- auras are secret in combat and reading them raises a taint error.
 local function ReadStacks()
+    if InCombatLockdown() then return nil end
     for index = 1, 40 do
         local name, stacks, expirationTime = PlayerBuff(index)
         if not name then break end
@@ -174,6 +177,7 @@ end
 
 local function StartSleeping(startedAt)
     local stacks, expiration = ReadStacks()
+    if not stacks then return end
     timer = Logic.NewTimer(startedAt, stacks, expiration)
     Render()
     bar:Show()
@@ -222,8 +226,10 @@ events:SetScript("OnEvent", function(_, event, ...)
     elseif event == "UNIT_AURA" then
         if timer then
             local stacks, expiration = ReadStacks()
-            Logic.OnAura(timer, GetTime(), stacks, expiration)
-            Render()
+            if stacks then
+                Logic.OnAura(timer, GetTime(), stacks, expiration)
+                Render()
+            end
         end
     elseif event == "PLAYER_ENTERING_WORLD" then
         StopSleeping()
