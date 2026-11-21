@@ -17,10 +17,10 @@ The state of a character lying down on a placed Cozy Sleeping Bag. The addon onl
 _Avoid_: Resting, laying down, camping
 
 **Stack**:
-One application of the **Well-Rested** buff, which gives +1% experience from kills and quests for 1 hour and can stack up to 3 times.
+One application of the **Well-Rested** buff, which gives +1% experience from kills and quests for 2 hours and can stack up to 3 times.
 
 **Refresh**:
-What a minute of Sleeping does once a character already has 3 Stacks: it resets the buff's duration to 1 hour without adding a Stack.
+What a minute of Sleeping does once a character already has 3 Stacks: it resets the buff's duration to 2 hours without adding a Stack.
 
 **Sleep Timer**:
 The countdown shown while Sleeping. It runs one minute for each Stack still missing, or one minute until the Refresh at 3 Stacks. It restarts from the current Stack count every time the character lies down.
