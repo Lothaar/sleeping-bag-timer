@@ -87,13 +87,30 @@ if not CreateFrame then return SBT end
 
 local GetItemSpell = (C_Item and C_Item.GetItemSpell) or GetItemSpell
 
+-- Returns name, applications, expirationTime of the player's index-th buff, or nil.
+-- WoW Forever lacks C_UnitAuras.GetPlayerAuraBySpellName, so we scan buffs by index
+-- with whichever API the client has.
+local function PlayerBuff(index)
+    if C_UnitAuras and C_UnitAuras.GetAuraDataByIndex then
+        local aura = C_UnitAuras.GetAuraDataByIndex("player", index, "HELPFUL")
+        if aura then return aura.name, aura.applications, aura.expirationTime end
+        return nil
+    end
+    local name, _, count, _, _, expirationTime = (UnitAura or UnitBuff)("player", index, "HELPFUL")
+    return name, count, expirationTime
+end
+
 local function ReadStacks()
-    local aura = C_UnitAuras.GetPlayerAuraBySpellName(BUFF_NAME)
-    if not aura then return 0, nil end
-    -- A single application can be reported as 0.
-    local stacks = aura.applications
-    if not stacks or stacks < 1 then stacks = 1 end
-    return stacks, aura.expirationTime
+    for index = 1, 40 do
+        local name, stacks, expirationTime = PlayerBuff(index)
+        if not name then break end
+        if name == BUFF_NAME then
+            -- A single application can be reported as 0.
+            if not stacks or stacks < 1 then stacks = 1 end
+            return stacks, expirationTime
+        end
+    end
+    return 0, nil
 end
 
 local function BagSpellID()
@@ -192,10 +209,10 @@ end)
 -- [DEBUG-sbt] event trace, saved to SleepingBagTimerDebugLog for replay in tests/replay.lua
 local debugBuffer = {}
 DebugLog = function(event, ...) -- [DEBUG-sbt]
-    local aura = C_UnitAuras and C_UnitAuras.GetPlayerAuraBySpellName and C_UnitAuras.GetPlayerAuraBySpellName(BUFF_NAME)
+    local stacks, exp = ReadStacks()
     debugBuffer[#debugBuffer + 1] = {
         t = GetTime(), e = event, a = { ... }, resting = IsResting(),
-        stacks = aura and aura.applications, exp = aura and aura.expirationTime,
+        stacks = stacks > 0 and stacks or nil, exp = exp,
         shown = bar:IsShown(),
     }
 end -- [DEBUG-sbt]

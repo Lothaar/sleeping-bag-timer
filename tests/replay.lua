@@ -7,6 +7,7 @@ local tracePath = assert(arg[1], "usage: luajit tests/replay.lua <trace.lua>")
 -- Clock, rested state, aura, deferred timers ------------------------------------
 local now, resting, aura = 0, false, nil
 local pending = {}
+local luaErrors = {}
 
 local function runTimersUntil(t)
     table.sort(pending, function(a, b) return a.at < b.at end)
@@ -14,7 +15,8 @@ local function runTimersUntil(t)
         local job = table.remove(pending, 1)
         local saved = now
         now = job.at
-        job.fn()
+        local ok, err = pcall(job.fn)
+        if not ok then luaErrors[#luaErrors + 1] = err end
         now = math.max(saved, now)
     end
 end
@@ -44,7 +46,15 @@ GetTime = function() return now end
 IsResting = function() return resting end
 C_Timer = { After = function(delay, fn) pending[#pending + 1] = { at = now + delay, fn = fn } end }
 C_Item = { GetItemSpell = function(id) if id == 211527 then return "Unroll Bag", 429961 end end }
-C_UnitAuras = { GetPlayerAuraBySpellName = function(name) if name == "Well-Rested" then return aura end end }
+-- WoW Forever (16001) has no C_UnitAuras.GetPlayerAuraBySpellName (captured trace, Lua error at
+-- line 91), so only the classic index-based aura API is mocked.
+local function unitAura(unit, index, filter)
+    if unit == "player" and index == 1 and aura and (filter == nil or filter == "HELPFUL") then
+        return "Well-Rested", 136090, aura.applications, nil, 3600, aura.expirationTime
+    end
+end
+UnitAura, UnitBuff = unitAura, unitAura
+C_UnitAuras = {} -- exists on 16001, but without GetPlayerAuraBySpellName
 
 -- Load the addon ---------------------------------------------------------------
 local chunk = assert(loadfile("SleepingBagTimer/SleepingBagTimer.lua"))
@@ -70,7 +80,8 @@ for _, entry in ipairs(trace) do
         now, resting = entry.t, entry.resting
         aura = entry.stacks and { applications = entry.stacks, expirationTime = entry.exp } or nil
         if e == "PLAYER_UPDATE_RESTING" and resting then sleptAt = sleptAt or entry.t end
-        eventFrame.scripts.OnEvent(eventFrame, e, unpack(entry.a or {}))
+        local ok, err = pcall(eventFrame.scripts.OnEvent, eventFrame, e, unpack(entry.a or {}))
+        if not ok then luaErrors[#luaErrors + 1] = err end
         replayed = replayed + 1
     elseif e == "LUA_ERROR" then
         print("trace recorded a Lua error in game: " .. tostring(entry.a and entry.a[1]))
@@ -79,6 +90,8 @@ end
 runTimersUntil(math.huge)
 
 print(("replayed %d events, rested at %s, bar ever shown: %s"):format(replayed, tostring(sleptAt), tostring(bar.everShown)))
+for _, err in ipairs(luaErrors) do print("Lua error during replay: " .. tostring(err)) end
+if #luaErrors > 0 then print("RED: Lua error(s) during replay"); os.exit(1) end
 local expectShown = env.EXPECT_SHOWN
 if expectShown == nil then expectShown = true end -- real captures: the user lay down on their bag
 if bar.everShown ~= expectShown then
