@@ -52,6 +52,8 @@ C_Item = { GetItemSpell = function(id) if id == 211527 then return "Unroll Bag",
 -- Lua error at line 91). GetAuraDataByIndex exists, but auras are secret in combat: calling it
 -- then raises "Auras cannot be accessed when secret while tainted" (in-game error report).
 local inCombat = false
+local speed = 0
+GetUnitSpeed = function(unit) if unit == "player" then return speed end return 0 end
 C_UnitAuras = {
     GetAuraDataByIndex = function(unit, index, filter)
         if inCombat then error("GetAuraDataByIndex(): Auras cannot be accessed when secret while tainted by 'SleepingBagTimer'") end
@@ -83,7 +85,7 @@ for _, entry in ipairs(trace) do
     local e = entry.e
     if not SYNTHETIC[e] and not e:match("^AFTER_") and not e:match("^ADDON_LOADED") then
         runTimersUntil(entry.t)
-        now, resting, inCombat = entry.t, entry.resting, entry.combat or false
+        now, resting, inCombat, speed = entry.t, entry.resting, entry.combat or false, entry.speed or 0
         aura = entry.stacks and { applications = entry.stacks, expirationTime = entry.exp } or nil
         if e == "PLAYER_UPDATE_RESTING" and resting then sleptAt = sleptAt or entry.t end
         local ok, err = pcall(eventFrame.scripts.OnEvent, eventFrame, e, unpack(entry.a or {}))

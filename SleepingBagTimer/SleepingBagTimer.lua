@@ -190,6 +190,8 @@ end
 local function OnBecameRested()
     local restedAt = GetTime()
     if not lastBagCastAt or restedAt - lastBagCastAt > PLACED_BAG_LIFETIME then return end
+    -- Lying down means standing still; walking into an inn's Rested area does not.
+    if GetUnitSpeed("player") > 0 then return end
     -- Area events may arrive just after the Rested change, so decide a moment later.
     C_Timer.After(SETTLE_DELAY, function()
         if timer or not IsResting() then return end
